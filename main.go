@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"sync"
-	// "time"
 
 	"github.com/gorilla/websocket"
 	"github.com/hypebeast/go-osc/osc"
@@ -30,9 +29,14 @@ func (h *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	log.Println("Client connected")
+	log.Printf("Client %s connected", conn.RemoteAddr().String())
 
 	var mu sync.Mutex
+	_, player, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Read error:", err)
+	}
+	log.Printf("Player %s is ready", string(player))
 
 	// Handle incoming messages
 	go func() {
@@ -63,14 +67,14 @@ func (h *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Wait for the connection to close
 	for {
-		msg := <-h.ch
+		msg := <-h.playerChannels[string(player)]
 		strMsg := msg.String()
 		log.Printf("inside handler: %v", strMsg)
-		command := msg.Arguments[0].(string)
+		command := msg.Arguments[1].(string)
 
 		param := ""
-		if msg.CountArguments() > 1 {
-			param = msg.Arguments[1].(string)
+		if msg.CountArguments() > 2 {
+			param = msg.Arguments[2].(string)
 		}
 
 		sendCommand(command, param)
@@ -79,18 +83,26 @@ func (h *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 type Handler struct {
 	ch chan *osc.Message
+	playerChannels map[string]chan *osc.Message
 }
 
 func main() {
 
 	oscChannel := make(chan *osc.Message)
+	// playerChannels := make(map[string]chan *osc.Message)
+	playerChannels := make(map[string]chan *osc.Message)
+	playerChannels["player1"] = make(chan *osc.Message)
+	playerChannels["player2"] = make(chan *osc.Message)
+
 	// osc
 	addr := ":8765"
 	d := osc.NewStandardDispatcher()
-	d.AddMsgHandler("/osc/player1", func(msg *osc.Message) {
-		// osc.PrintMessage(msg)
-		oscChannel <- msg
+	d.AddMsgHandler("/osc", func(msg *osc.Message) {
 		osc.PrintMessage(msg)
+		player := msg.Arguments[0].(string)
+		playerChannels[player] <- msg
+		// osc.PrintMessage(msg)
+		// oscChannel <- msg
 	})
 
 	server := &osc.Server{
@@ -101,6 +113,7 @@ func main() {
 
 	handler := Handler{
 		ch: oscChannel,
+		playerChannels: playerChannels,
 	}
 
 	// Serve static files from the "public" directory

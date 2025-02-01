@@ -1,5 +1,6 @@
 const video = document.getElementById('video');
 const image = document.getElementById('image');
+const buttonContainer = document.getElementById('buttons');
 
 const ws = new WebSocket('ws://localhost:8080/ws');
 
@@ -51,6 +52,7 @@ function setImageSource(src) {
 function requestFullscreen(element) {
   if (element.mozRequestFullScreen) {
     element.mozRequestFullScreen();
+  }
 }
 
 document.addEventListener('fullscreenchange', () => {
@@ -62,3 +64,19 @@ document.addEventListener('fullscreenchange', () => {
 ws.onclose = () => {
   console.log('Disconnected from server');
 };
+
+// Get all buttons on the page
+const buttons = document.querySelectorAll('button');
+
+// Add a click event listener to each button
+buttons.forEach(button => {
+    button.addEventListener('click', (event) => {
+        // Get the id of the clicked button
+        const buttonId = event.target.id;
+
+        // Print the id to the console
+        console.log(`Last clicked button ID: ${buttonId}`);
+        ws.send(buttonId);
+        buttonContainer.style.display = 'none';
+    });
+});
